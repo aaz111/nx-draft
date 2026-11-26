@@ -1,0 +1,47 @@
+# PyInstaller 版本信息文件：写进 exe 的 Windows 资源段。
+# 效果是右键 exe → 属性 → 详细信息，能看到产品名、版本、版权。
+# build.spec 里通过 version='version_info.txt' 引用。
+
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(1, 0, 0, 0),
+    prodvers=(1, 0, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable(
+        '080404B0',          # 简体中文 + Unicode
+        [
+          StringStruct('CompanyName', 'aaz111'),
+          StringStruct('FileDescription', 'nxdraft — Siemens NX 制图工具'),
+          StringStruct('FileVersion', '1.0.0.0'),
+          StringStruct('InternalName', 'nxdraft'),
+          StringStruct('LegalCopyright', 'MIT License'),
+          StringStruct('OriginalFilename', 'nxdraft.exe'),
+          StringStruct('ProductName', 'nxdraft'),
+          StringStruct('ProductVersion', '1.0.0'),
+        ]
+      ),
+      StringTable(
+        '040904B0',          # 英文 + Unicode
+        [
+          StringStruct('CompanyName', 'aaz111'),
+          StringStruct('FileDescription', 'nxdraft — Siemens NX drafting tool'),
+          StringStruct('FileVersion', '1.0.0.0'),
+          StringStruct('InternalName', 'nxdraft'),
+          StringStruct('LegalCopyright', 'MIT License'),
+          StringStruct('OriginalFilename', 'nxdraft.exe'),
+          StringStruct('ProductName', 'nxdraft'),
+          StringStruct('ProductVersion', '1.0.0'),
+        ]
+      ),
+    ]),
+    VarFileInfo([VarStruct('Translation', [0x0804, 1200, 0x0409, 1200])])
+  ]
+)

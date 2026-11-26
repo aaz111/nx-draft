@@ -5,13 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "nxdraft"
 version = "1.0.0"
-description = "Siemens NX drafting tools without DSH: part drawings, dimensions, GB frames, BOM tables, batch printing"
+description = "Siemens NX drafting tools without DSH: part drawings, native dimensions, GB frames, BOM tables, batch printing"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
 authors = [{ name = "aaz111" }]
-keywords = ["nx", "siemens", "drafting", "cad", "drawing", "pdf"]
+keywords = ["nx", "siemens", "drafting", "cad", "drawing", "pdf", "nxopen", "engineering-drawing"]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Manufacturing",
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
@@ -21,6 +23,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/aaz111/nx-draft"
 Repository = "https://github.com/aaz111/nx-draft"
+Issues = "https://github.com/aaz111/nx-draft/issues"
 
 [project.scripts]
 nxdraft = "nxdraft.cli:main"

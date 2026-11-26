@@ -17,6 +17,18 @@ import sys
 
 block_cipher = None
 
+# ---- 图标与版本信息 ----
+# 图标是可选的：assets/nxdraft.ico 不存在时退回默认图标，不让打包失败。
+# PyInstaller 执行 spec 时 cwd 是仓库根（打包命令在那儿跑），所以用相对路径找。
+ICON_CANDIDATE = os.path.join(os.getcwd(), "assets", "nxdraft.ico")
+ICON_PATH = ICON_CANDIDATE if os.path.isfile(ICON_CANDIDATE) else None
+VERSION_CANDIDATE = os.path.join(os.getcwd(), "version_info.txt")
+VERSION_FILE = VERSION_CANDIDATE if os.path.isfile(VERSION_CANDIDATE) else None
+if ICON_PATH is None:
+    print("build: assets/nxdraft.ico 不存在，使用默认图标")
+if VERSION_FILE is None:
+    print("build: version_info.txt 不存在，跳过版本信息")
+
 # exe 运行时要让 **NX 的 Python** import 到 nxdraft：NX 是另一个进程，
 # 拿不到 exe 里打包的模块，所以必须把整个包目录作为 datas 释放到 _MEIPASS，
 # launcher.package_root() 会把那个目录塞进 journal 的 sys.path。
@@ -83,5 +95,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    # 图标与版本信息：右键 exe → 属性 → 详细信息 里能看到产品名/版本
+    icon=ICON_PATH,
+    version=VERSION_FILE,
 )
