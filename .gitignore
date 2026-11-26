@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+# dist/ 里有 exe，但那是构建产物，不进仓库（用 GitHub Release 分发）
+*.manifest
+*.spec.bak
+
+# 虚拟环境
+.venv/
+venv/
+ENV/
+env/
+
+# 测试与临时产物
+_test_out/
+_asm_test*/
+_ui*/
+_t[0-9]/
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# 本机临时目录
+~$*

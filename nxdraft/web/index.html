@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nxdraft · NX 制图</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --line: #e3e6ea;
+    --text: #1f2328;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --accent-soft: #eff4ff;
+    --ok: #15803d;
+    --warn: #b45309;
+    --err: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font: 14px/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  header {
+    background: var(--card); border-bottom: 1px solid var(--line);
+    padding: 14px 22px; display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { margin: 0; font-size: 17px; font-weight: 650; }
+  header .meta { color: var(--muted); font-size: 12px; margin-left: auto; text-align: right; }
+  header .meta b { color: var(--text); font-weight: 550; }
+  main {
+    max-width: 1240px; margin: 0 auto; padding: 22px;
+    display: grid; grid-template-columns: 1fr 360px; gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 1020px) { main { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 18px; margin-bottom: 18px;
+  }
+  .card h2 {
+    margin: 0 0 14px; font-size: 14px; font-weight: 650;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h2 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 5px; }
+  label:first-of-type { margin-top: 0; }
+  input[type=text], input[type=number], select {
+    width: 100%; padding: 8px 10px; font: inherit; font-size: 13px;
+    border: 1px solid var(--line); border-radius: 7px; background: #fff;
+  }
+  input:focus, select:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; min-width: 0; }
+  .row > .narrow { flex: 0 0 120px; }
+  button {
+    font: inherit; font-size: 13px; padding: 9px 16px; border-radius: 7px;
+    border: 1px solid var(--line); background: #fff; color: var(--text);
+    cursor: pointer; transition: .12s;
+  }
+  button:hover:not(:disabled) { border-color: #c9cfd6; background: #fafbfc; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary {
+    background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 550;
+  }
+  button.primary:hover:not(:disabled) { background: #1d4ed8; border-color: #1d4ed8; }
+  .actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .status {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; padding: 3px 9px; border-radius: 20px;
+    background: #f1f3f5; color: var(--muted);
+  }
+  .status.running { background: #fff7ed; color: var(--warn); }
+  .status.done { background: #f0fdf4; color: var(--ok); }
+  .status.failed { background: #fef2f2; color: var(--err); }
+  pre.log {
+    margin: 0; padding: 12px; background: #0f172a; color: #cbd5e1;
+    border-radius: 8px; font: 12px/1.6 Consolas, "Cascadia Mono", monospace;
+    max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+  }
+  .filelist { list-style: none; margin: 0; padding: 0; }
+  .filelist li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px;
+  }
+  .filelist li:last-child { border-bottom: 0; }
+  .filelist .kind {
+    flex: 0 0 42px; font-size: 10px; font-weight: 700; text-align: center;
+    padding: 2px 0; border-radius: 4px; background: #eef2ff; color: #4338ca;
+  }
+  .filelist .kind.pdf { background: #fef2f2; color: #b91c1c; }
+  .filelist .kind.csv { background: #f0fdf4; color: #15803d; }
+  .filelist .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .filelist .size { color: var(--muted); font-size: 11px; }
+  .empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
+  .err-box {
+    background: #fef2f2; border: 1px solid #fecaca; color: var(--err);
+    padding: 10px 12px; border-radius: 8px; font-size: 12px; margin-top: 12px;
+    white-space: pre-wrap; word-break: break-all;
+  }
+
+  /* 视图选择：数量 + 勾选。
+     芯片用 grid 而不是 flex-wrap：flex 下每个芯片按内容宽度排，两行之间
+     起点和宽度都对不齐（「俯视图 Top」比「正二测图 Trimetric」窄很多）。
+     grid 让每列等宽，换行后也整齐。
+
+     芯片本身用 <button> 而不是 <label>+<input>：label 里塞隐藏的 checkbox
+     会让第一个格子的盒子比其他格子高出一截（表单元素的基线参与行高计算），
+     实测「俯视图」那个按钮明显比同排其他按钮大一圈。button 没有这个问题。 */
+  .view-block { display: flex; gap: 10px; align-items: flex-start; margin-top: 6px; }
+  .view-count { flex: 0 0 118px; }
+  .view-count select { height: 38px; }
+  .view-picks {
+    flex: 1; display: grid; gap: 6px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: 30px;
+    padding: 6px; border: 1px solid var(--line); border-radius: 7px;
+    background: #fbfcfd; align-content: start;
+  }
+  @media (max-width: 760px) { .view-picks { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .chip {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    font: inherit; font-size: 12px; line-height: 1; margin: 0;
+    padding: 0 6px; border-radius: 7px; box-sizing: border-box;
+    border: 1px solid var(--line); background: #fff; color: var(--text);
+    cursor: pointer; user-select: none; transition: .12s;
+    height: 30px; min-height: 0; max-height: 30px;
+    overflow: hidden; white-space: nowrap; text-align: center;
+  }
+  .chip:hover:not(.disabled) { border-color: #c9cfd6; }
+  .chip.on { background: var(--accent-soft); border-color: #bfd4ff; color: var(--accent); font-weight: 600; }
+  .chip.disabled { opacity: .4; cursor: not-allowed; }
+  .chip .n { font-size: 10px; color: var(--muted); font-weight: 400; }
+  .chip.on .n { color: #6b8fd6; }
+  .chip .n { font-size: 10px; color: var(--muted); }
+
+  /* 尺寸勾选 */
+  .dims { display: flex; gap: 14px; margin-top: 6px; flex-wrap: wrap; }
+  .dims label {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--text); margin: 0; cursor: pointer;
+  }
+  .dims input { width: 15px; height: 15px; }
+
+  /* 图纸顺序表 */
+  .order-table {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px;
+  }
+  .order-table th {
+    text-align: left; font-weight: 600; color: var(--muted);
+    font-size: 11px; padding: 6px 8px; border-bottom: 1px solid var(--line);
+  }
+  .order-table td { padding: 6px 8px; border-bottom: 1px solid #f0f2f4; }
+  .order-table tr:last-child td { border-bottom: 0; }
+  .order-table .no { width: 56px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .order-table .qty { width: 48px; text-align: center; color: var(--muted); }
+  .order-table .mv { width: 64px; white-space: nowrap; }
+  .order-table .mv button {
+    padding: 1px 7px; font-size: 11px; border-radius: 5px; line-height: 1.5;
+  }
+  .order-table tr.dragging { opacity: .4; }
+  .order-empty { color: var(--muted); font-size: 12.5px; padding: 12px 0; }
+  .badge {
+    display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 10px;
+    background: #eef2ff; color: #4338ca; margin-left: 6px;
+  }
+  .sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>nxdraft</h1>
+  <span class="status" id="hdrStatus">就绪</span>
+  <div class="meta">
+    NX <b id="nxHome">…</b><br>
+    产物 <b id="outDir">…</b>
+  </div>
+</header>
+
+<main>
+  <div>
+    <!-- 出零件图 -->
+    <section class="card">
+      <h2><span class="dot"></span>出零件图</h2>
+      <label>零件文件（.prt）</label>
+      <input type="text" id="partPath" placeholder="选择或粘贴 .prt 文件路径">
+
+      <label>视图</label>
+      <div class="view-block">
+        <div class="view-count">
+          <select id="viewCount">
+            <option value="0" selected>自动（最少）</option>
+            <option value="1">1 个</option>
+            <option value="2">2 个</option>
+            <option value="3">3 个</option>
+            <option value="4">4 个</option>
+          </select>
+        </div>
+        <div class="view-picks" id="viewPicks"></div>
+      </div>
+      <div class="hint" id="viewHint">选「自动」时按零件自动决定最少视图；选数量后可勾选具体视图（中文或原名都行）。</div>
+
+      <div class="row">
+        <div class="narrow" style="flex:0 0 100px;">
+          <label>幅面</label>
+          <select id="size">
+            <option>A4</option><option selected>A3</option>
+            <option>A2</option><option>A1</option><option>A0</option>
+          </select>
+        </div>
+        <div style="flex:1 1 0;">
+          <label>材料（标题栏）</label>
+          <input type="text" id="material" placeholder="45">
+        </div>
+        <div style="flex:1 1 0;">
+          <label>图号（标题栏）</label>
+          <input type="text" id="drawingNo" placeholder="DSP-001">
+        </div>
+      </div>
+
+      <label>尺寸标注</label>
+      <div class="dims">
+        <label><input type="checkbox" id="dimLength" checked> 线性尺寸</label>
+        <label><input type="checkbox" id="dimDiameter" checked> 直径尺寸</label>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="btnDrawing">出图 + 标注 + PDF</button>
+      </div>
+      <div class="hint">一次调用完成：投影视图 → 原生尺寸 → GB 图框 → 打印 PDF。约 20~80 秒。</div>
+    </section>
+
+    <!-- 批量出图 -->
+    <section class="card">
+      <h2><span class="dot"></span>批量出图</h2>
+      <label>装配文件（.prt）</label>
+      <div class="row">
+        <div><input type="text" id="asmPath" placeholder="选择或粘贴装配 .prt 文件路径"></div>
+        <div class="narrow" style="flex:0 0 110px;">
+          <button id="btnAnalyze" style="width:100%;">分析装配</button>
+        </div>
+      </div>
+      <div class="hint" id="asmHint">先「分析装配」读取零件清单，再调整图纸顺序。</div>
+
+      <!-- 零件清单 / 顺序 -->
+      <div id="orderPanel" style="display:none;">
+        <label>图纸顺序 <span class="badge" id="orderCount"></span></label>
+        <div class="sub">用 ↑↓ 调整。图号按这个顺序自动生成（装配图为 0，零件从 1 开始）。</div>
+        <table class="order-table">
+          <thead>
+            <tr><th class="no">图号</th><th>零件名称</th><th class="qty">数量</th><th class="mv"></th></tr>
+          </thead>
+          <tbody id="orderBody"></tbody>
+        </table>
+      </div>
+
+      <label>图号规则</label>
+      <div class="row">
+        <div class="narrow" style="flex:0 0 130px;">
+          <input type="text" id="noPrefix" placeholder="前缀（可空）">
+        </div>
+        <div class="narrow" style="flex:0 0 110px;">
+          <input type="number" id="noStart" value="1" min="1" title="零件起始号">
+        </div>
+        <div class="narrow" style="flex:0 0 110px;">
+          <input type="number" id="noDigits" value="0" min="0" max="6" title="补零位数">
+        </div>
+        <div>
+          <select id="batchSize">
+            <option selected>A4</option><option>A3</option>
+            <option>A2</option><option>A1</option>
+          </select>
+        </div>
+      </div>
+      <div class="hint">从左到右：前缀 / 零件起始号 / 补零位数（0=不补）/ 幅面。装配图固定图号 0。</div>
+
+      <label>材料（统一写入标题栏）</label>
+      <input type="text" id="batchMaterial" placeholder="留空则用零件自身属性">
+
+      <label>尺寸标注</label>
+      <div class="dims">
+        <label><input type="checkbox" id="batchLength" checked> 零件图标线性尺寸</label>
+        <label><input type="checkbox" id="batchDiameter" checked> 零件图标直径尺寸</label>
+        <label><input type="checkbox" id="asmDrawing" checked> 先出装配图（图号 0）</label>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="btnBatch">批量出图</button>
+        <button id="btnBom">明细表</button>
+      </div>
+      <div class="hint">批量出图会逐件生成图纸 + PDF，并保护装配引用不被改写。</div>
+    </section>
+
+    <!-- 日志 -->
+    <section class="card">
+      <h2><span class="dot"></span>运行日志</h2>
+      <pre class="log" id="log">等待任务…</pre>
+      <div id="errBox"></div>
+    </section>
+  </div>
+
+  <!-- 右侧：产物 -->
+  <div>
+    <section class="card">
+      <h2><span class="dot"></span>产物</h2>
+      <label>产物目录</label>
+      <div class="row">
+        <div><input type="text" id="outDirInput" placeholder="留空则用默认目录"></div>
+        <div class="narrow" style="flex:0 0 76px;">
+          <button id="btnApplyOut" style="width:100%;">应用</button>
+        </div>
+      </div>
+      <div class="hint" id="outHint">改完点「应用」，之后的产物写到这里。</div>
+      <ul class="filelist" id="files"><li class="empty">暂无产物</li></ul>
+      <div class="actions">
+        <button id="btnRefresh">刷新</button>
+        <button id="btnOpenOut">打开目录</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+/*__BOOTSTRAP__*/
+
+const B = window.BOOTSTRAP || {};
+const $ = (id) => document.getElementById(id);
+let currentJob = null;
+let pollTimer = null;
+let orderItems = [];          // 分析装配后得到的零件清单（当前顺序）
+
+// ---- 视图定义（与后端 options.VIEW_NAMES 对应） ----
+const VIEWS = [
+  { key: 'top',       cn: '俯视图',   en: 'Top' },
+  { key: 'front',     cn: '主视图',   en: 'Front' },
+  { key: 'right',     cn: '右视图',   en: 'Right' },
+  { key: 'left',      cn: '左视图',   en: 'Left' },
+  { key: 'bottom',    cn: '仰视图',   en: 'Bottom' },
+  { key: 'back',      cn: '后视图',   en: 'Back' },
+  { key: 'isometric', cn: '轴测图',   en: 'Isometric' },
+  { key: 'trimetric', cn: '正二测图', en: 'Trimetric' },
+];
+
+// ---- 基础 ----
+
+async function api(path, options) {
+  const response = await fetch(path, options);
+  const text = await response.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+  return data;
+}
+
+function post(action, payload) {
+  return api('/api/action', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(Object.assign({ action, token: B.token }, payload || {})),
+  });
+}
+
+function setStatus(text, kind) {
+  const el = $('hdrStatus');
+  el.textContent = text;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+function showError(message, trace) {
+  const box = $('errBox');
+  if (!message) { box.innerHTML = ''; return; }
+  const div = document.createElement('div');
+  div.className = 'err-box';
+  div.textContent = trace ? (message + '\n\n' + trace) : message;
+  box.innerHTML = '';
+  box.appendChild(div);
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+// ---- 视图选择 ----
+
+function buildViewChips() {
+  const box = $('viewPicks');
+  box.innerHTML = '';
+  VIEWS.forEach((view) => {
+    // 用 button 而不是 label+checkbox：label 里的表单元素会撑高所在格子，
+    // 导致第一个按钮比同排其他按钮大一圈（实测）。
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip';
+    chip.dataset.key = view.key;
+    chip.setAttribute('aria-pressed', 'false');
+    chip.innerHTML =
+      '<span>' + view.cn + '</span>' +
+      '<span class="n">' + view.en + '</span>';
+    chip.addEventListener('click', () => {
+      if (chip.disabled) return;
+      const on = chip.classList.toggle('on');
+      chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+      syncViewChips();
+    });
+    box.appendChild(chip);
+  });
+  // 默认选中前两个（俯视 + 主视）
+  const chips = box.querySelectorAll('.chip');
+  if (chips.length >= 2) {
+    chips[0].classList.add('on');
+    chips[1].classList.add('on');
+    chips[0].setAttribute('aria-pressed', 'true');
+    chips[1].setAttribute('aria-pressed', 'true');
+  }
+  syncViewChips();
+}
+
+function selectedViews() {
+  return Array.from($('viewPicks').querySelectorAll('.chip.on'))
+    .map(chip => chip.dataset.key);
+}
+
+function syncViewChips() {
+  const count = Number($('viewCount').value);
+  const chosen = selectedViews();
+  const box = $('viewPicks');
+  box.querySelectorAll('.chip').forEach(chip => {
+    const on = chip.classList.contains('on');
+    // 选了数量时，勾满后其余置灰（已选的仍可点掉）
+    const full = count > 0 && chosen.length >= count && !on;
+    chip.classList.toggle('disabled', full);
+    chip.disabled = full;
+  });
+  const hint = $('viewHint');
+  if (count === 0) {
+    hint.textContent = '选「自动」时按零件自动决定最少视图（勾选忽略）。';
+  } else if (chosen.length === count) {
+    hint.textContent = '已选 ' + count + ' 个视图：' + chosen.map(key => {
+      const v = VIEWS.find(item => item.key === key);
+      return v ? v.cn : key;
+    }).join('、');
+  } else {
+    hint.textContent = '请再选 ' + (count - chosen.length) + ' 个视图（已选 ' + chosen.length + '/' + count + '）。';
+  }
+}
+
+$('viewCount').addEventListener('change', () => {
+  const count = Number($('viewCount').value);
+  if (count > 0) {
+    // 数量变了：把选中项裁到/补到 count 个
+    const chips = Array.from($('viewPicks').querySelectorAll('.chip'));
+    let chosen = chips.filter(chip => chip.classList.contains('on'));
+    if (chosen.length > count) {
+      chosen.slice(count).forEach(chip => {
+        chip.classList.remove('on');
+        chip.setAttribute('aria-pressed', 'false');
+      });
+    } else if (chosen.length < count) {
+      const rest = chips.filter(chip => !chip.classList.contains('on'));
+      rest.slice(0, count - chosen.length).forEach(chip => {
+        chip.classList.add('on');
+        chip.setAttribute('aria-pressed', 'true');
+      });
+    }
+  }
+  syncViewChips();
+});
+
+// ---- 任务轮询 ----
+
+function watchJob(jobId, title) {
+  currentJob = jobId;
+  setStatus(title + ' 运行中…', 'running');
+  $('log').textContent = '';
+  showError(null);
+  disableAll(true);
+
+  clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    let snap;
+    try {
+      snap = await api('/api/job/' + jobId);
+    } catch (error) {
+      clearInterval(pollTimer);
+      setStatus('轮询失败', 'failed');
+      disableAll(false);
+      return;
+    }
+    const log = $('log');
+    log.textContent = (snap.logs && snap.logs.length) ? snap.logs.join('\n') : '（无输出）';
+    log.scrollTop = log.scrollHeight;
+
+    if (snap.state === 'running') {
+      setStatus(title + ' 运行中… ' + snap.elapsed + 's', 'running');
+      return;
+    }
+    clearInterval(pollTimer);
+    disableAll(false);
+    if (snap.state === 'done') {
+      setStatus(title + ' 完成 (' + snap.elapsed + 's)', 'done');
+      renderResult(snap);
+      loadFiles();
+    } else {
+      setStatus(title + ' 失败', 'failed');
+      showError(snap.error, snap.trace);
+    }
+  }, 900);
+}
+
+function renderResult(snap) {
+  const result = snap.result || {};
+  const lines = [];
+  if (result.drawing && result.drawing.sheet) {
+    const views = (result.drawing.sheet.views || []).map(v => v.name).join(', ');
+    lines.push('视图: ' + views);
+  }
+  if (result.dimension) {
+    lines.push('尺寸: ' + (result.dimension.dimensions || 0) + ' 个' +
+      (result.dimension.skipped ? '（跳过 ' + result.dimension.skipped.length + '）' : ''));
+  }
+  if (result.pdf) {
+    lines.push('PDF: ' + result.pdf.path + '  ' + formatSize(result.pdf.bytes || 0));
+  }
+  if (result.drawn !== undefined) {
+    lines.push('批量: ' + result.drawn + '/' + result.parts + ' 件，' +
+      (result.files || []).length + ' 个 PDF');
+    (result.rows || []).slice(0, 30).forEach(row => {
+      lines.push('  ' + (row.drawingNo || '') + '  ' + (row.part || '') +
+        '  视图 ' + ((row.sheet && row.sheet.views) ? row.sheet.views.length : 0) +
+        '  尺寸 ' + (row.dimensions || 0) + (row.error ? '  ✗ ' + row.error : ''));
+    });
+  }
+  if (result.groups) {
+    lines.push('明细表: ' + result.groups.length + ' 项');
+  }
+  if (result.items) {
+    lines.push('装配分析: ' + result.count + ' 个零件');
+  }
+  if (lines.length) {
+    $('log').textContent += '\n\n── 结果 ──\n' + lines.join('\n');
+    $('log').scrollTop = $('log').scrollHeight;
+  }
+}
+
+function disableAll(busy) {
+  ['btnDrawing', 'btnBatch', 'btnBom', 'btnAnalyze'].forEach(id => {
+    const el = $(id);
+    if (el) el.disabled = busy;
+  });
+}
+
+// ---- 装配分析与图纸顺序 ----
+
+function renderOrder() {
+  const panel = $('orderPanel');
+  const body = $('orderBody');
+  if (!orderItems.length) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = '';
+  $('orderCount').textContent = orderItems.length + ' 个零件';
+  body.innerHTML = '';
+
+  const prefix = $('noPrefix').value.trim();
+  const start = Math.max(1, Number($('noStart').value) || 1);
+  const digits = Math.max(0, Number($('noDigits').value) || 0);
+
+  orderItems.forEach((item, index) => {
+    let number = String(start + index);
+    if (digits > 0) number = number.padStart(digits, '0');
+    const tr = document.createElement('tr');
+
+    const no = document.createElement('td');
+    no.className = 'no';
+    no.textContent = prefix + number;
+
+    const name = document.createElement('td');
+    name.textContent = item.name;
+    if (item.quantity > 1) {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = '×' + item.quantity;
+      name.appendChild(badge);
+    }
+
+    const qty = document.createElement('td');
+    qty.className = 'qty';
+    qty.textContent = item.quantity || 1;
+
+    const mv = document.createElement('td');
+    mv.className = 'mv';
+    const up = document.createElement('button');
+    up.textContent = '↑';
+    up.disabled = index === 0;
+    up.onclick = () => { moveItem(index, -1); };
+    const down = document.createElement('button');
+    down.textContent = '↓';
+    down.disabled = index === orderItems.length - 1;
+    down.onclick = () => { moveItem(index, 1); };
+    mv.append(up, down);
+
+    tr.append(no, name, qty, mv);
+    body.appendChild(tr);
+  });
+}
+
+function moveItem(index, delta) {
+  const target = index + delta;
+  if (target < 0 || target >= orderItems.length) return;
+  const copy = orderItems.slice();
+  const moved = copy.splice(index, 1)[0];
+  copy.splice(target, 0, moved);
+  orderItems = copy;
+  renderOrder();
+}
+
+['noPrefix', 'noStart', 'noDigits'].forEach(id => {
+  $(id).addEventListener('input', renderOrder);
+});
+
+// ---- 产物列表 ----
+
+async function loadFiles() {
+  try {
+    const data = await api('/api/files');
+    const list = $('files');
+    if (!data.files || !data.files.length) {
+      list.innerHTML = '<li class="empty">暂无产物</li>';
+      return;
+    }
+    list.innerHTML = '';
+    data.files.forEach(file => {
+      const li = document.createElement('li');
+      const kind = document.createElement('span');
+      kind.className = 'kind ' + file.kind;
+      kind.textContent = file.kind.toUpperCase();
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = file.name;
+      name.title = file.path;
+      const size = document.createElement('span');
+      size.className = 'size';
+      size.textContent = formatSize(file.size);
+      const open = document.createElement('button');
+      open.textContent = '打开';
+      open.style.padding = '3px 10px';
+      open.style.fontSize = '12px';
+      open.onclick = () => post('open', { path: file.path });
+      li.append(kind, name, size, open);
+      list.appendChild(li);
+    });
+  } catch (error) { /* 列表失败不影响主流程 */ }
+}
+
+// ---- 按钮 ----
+
+$('btnDrawing').onclick = async () => {
+  const path = $('partPath').value.trim();
+  if (!path) { showError('请填写零件文件路径'); return; }
+  const count = Number($('viewCount').value);
+  const views = count > 0 ? selectedViews() : null;
+  if (count > 0 && views.length !== count) {
+    showError('已选视图数量（' + views.length + '）与要求的 ' + count + ' 个不一致');
+    return;
+  }
+  try {
+    const data = await post('drawing', {
+      path,
+      size: $('size').value,
+      views: views,
+      viewCount: count,
+      material: $('material').value.trim(),
+      drawingNo: $('drawingNo').value.trim(),
+      length: $('dimLength').checked,
+      diameter: $('dimDiameter').checked,
+      pdf: true,
+    });
+    watchJob(data.job, '出图');
+  } catch (error) { showError(error.message); }
+};
+
+$('btnAnalyze').onclick = async () => {
+  const path = $('asmPath').value.trim();
+  if (!path) { showError('请填写装配文件路径'); return; }
+  try {
+    const data = await post('analyze', { path });
+    watchJob(data.job, '分析装配');
+    // 分析完成后由轮询把 items 填进来
+    const original = renderResult;
+    const waiter = setInterval(async () => {
+      try {
+        const snap = await api('/api/job/' + data.job);
+        if (snap.state === 'done' && snap.result && snap.result.items) {
+          clearInterval(waiter);
+          orderItems = snap.result.items.map(item => ({
+            name: item.name, file: item.file, quantity: item.quantity,
+            material: item.material,
+          }));
+          renderOrder();
+          $('asmHint').textContent =
+            '已读取 ' + orderItems.length + ' 个零件。用 ↑↓ 调整顺序，图号会跟着变。';
+        } else if (snap.state === 'failed') {
+          clearInterval(waiter);
+        }
+      } catch (error) { clearInterval(waiter); }
+    }, 1200);
+  } catch (error) { showError(error.message); }
+};
+
+$('btnBatch').onclick = async () => {
+  const path = $('asmPath').value.trim();
+  if (!path) { showError('请填写装配文件路径'); return; }
+  try {
+    const data = await post('batch', {
+      path,
+      size: $('batchSize').value,
+      order: orderItems.map(item => item.name),
+      numberPrefix: $('noPrefix').value.trim(),
+      numberStart: Math.max(1, Number($('noStart').value) || 1),
+      numberDigits: Math.max(0, Number($('noDigits').value) || 0),
+      material: $('batchMaterial').value.trim(),
+      length: $('batchLength').checked,
+      diameter: $('batchDiameter').checked,
+      assemblyDrawing: $('asmDrawing').checked,
+    });
+    watchJob(data.job, '批量出图');
+  } catch (error) { showError(error.message); }
+};
+
+$('btnBom').onclick = async () => {
+  const path = $('asmPath').value.trim();
+  if (!path) { showError('请填写装配文件路径'); return; }
+  try {
+    const data = await post('bom', { path });
+    watchJob(data.job, '明细表');
+  } catch (error) { showError(error.message); }
+};
+
+$('btnRefresh').onclick = loadFiles;
+$('btnOpenOut').onclick = () => post('open-out', {});
+
+// 产物目录：改完点「应用」，后端把 out_dir 换掉（会建目录）
+$('btnApplyOut').onclick = async () => {
+  const target = $('outDirInput').value.trim();
+  if (!target) {
+    $('outHint').textContent = '请填一个目录路径';
+    return;
+  }
+  try {
+    const data = await post('set-out-dir', { path: target });
+    B.outDir = data.outDir;
+    $('outDir').textContent = data.outDir;
+    $('outDirInput').value = data.outDir;
+    $('outHint').textContent = '已切换到 ' + data.outDir;
+    loadFiles();
+  } catch (error) {
+    $('outHint').textContent = '切换失败: ' + error.message;
+  }
+};
+
+$('outDirInput').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') { event.preventDefault(); $('btnApplyOut').click(); }
+});
+
+// ---- 初始化 ----
+
+async function loadInfo() {
+  try {
+    const info = await api('/api/info');
+    $('nxHome').textContent = info.nxHome || '(未找到)';
+    $('outDir').textContent = info.outDir || '';
+    $('outDirInput').value = info.outDir || '';
+  } catch (error) {
+    $('nxHome').textContent = '读取失败';
+  }
+}
+
+buildViewChips();
+loadInfo();
+loadFiles();
+</script>
+</body>
+</html>
